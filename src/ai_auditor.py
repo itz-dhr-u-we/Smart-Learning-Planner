@@ -56,7 +56,7 @@ def render_ai_auditor_tab():
     else:
         st.write(f"Found **{len(filtered_logs)}** relevant session(s) from the past 7 days for analysis.")
         
-        if st.button(f"🚀 Generate AI Review for {selected_target}"):
+        if st.button(f"Generate AI Review for {selected_target}"):
             with st.spinner("Analyzing study patterns and technical roadblocks..."):
                 log_summary_text = ""
                 for item in filtered_logs:
@@ -91,7 +91,7 @@ def render_ai_auditor_tab():
                         contents=prompt,
                     )
                     
-                    st.subheader(f"📋 AI Insights: {selected_target}")
+                    st.subheader(f"AI Insights: {selected_target}")
                     st.markdown(response.text)
                 except Exception as e:
                     st.error(f"Error generating AI review. Ensure your GEMINI_API_KEY environment variable is set properly. Details: {e}")

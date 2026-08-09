@@ -78,7 +78,7 @@ def render_manage_subjects_tab():
                 
                 # --- EDIT SUBJECT FORM ---
                 with st.form(f"edit_subject_form_{sub.id}"):
-                    st.write("✏️ **Edit Subject Details**")
+                    st.write("✏️ Edit Subject Details")
                     new_sub_name = st.text_input("Subject Name", value=sub.name, key=f"edit_name_{sub.id}")
                     new_category = st.selectbox("Category", ["Theory", "Lab", "Others"], index=["Theory", "Lab", "Others"].index(sub.category) if sub.category in ["Theory", "Lab", "Others"] else 0, key=f"edit_cat_{sub.id}")
                     new_credits = st.number_input("Credits", min_value=1, max_value=10, value=sub.credits, key=f"edit_cred_{sub.id}")
@@ -105,7 +105,7 @@ def render_manage_subjects_tab():
                 st.markdown("---")
                 
                 # --- COURSE RESOURCES & SUMMARIZER HUB ---
-                st.markdown("##### 📚 Course Resources & Playlist Tracker")
+                st.markdown("📚 Course Resources & Playlist Tracker")
                 
                 with st.form(f"add_resource_form_{sub.id}"):
                     res_type = st.selectbox("Resource Type", ["PDF Slides / Notes", "Reference Book / Chapter", "YouTube Playlist"], key=f"res_type_{sub.id}")
@@ -131,7 +131,7 @@ def render_manage_subjects_tab():
                 # Display existing resources with Delete and Summarize options
                 subject_resources = db.query(Resource).filter(Resource.subject_id == sub.id).all()
                 if subject_resources:
-                    st.write("📂 **Existing Resources:**")
+                    st.write("📂 Existing Resources:")
                     base_dir = os.path.dirname(os.path.abspath(__file__))
                     upload_dir = os.path.join(base_dir, "..", "data", "uploads")
                     available_pdfs = [f for f in os.listdir(upload_dir) if f.lower().endswith('.pdf')] if os.path.exists(upload_dir) else []
@@ -173,7 +173,7 @@ def render_manage_subjects_tab():
                 st.markdown("---")
 
                 # --- TOPIC MANAGEMENT & AI GUIDE ---
-                st.markdown("##### 🎯 Topics")
+                st.markdown("🎯 Topics")
                 topics = db.query(topic).filter(topic.subject_id == sub.id).all()
                 for t in topics:
                     col1, col2, col3 = st.columns([0.6, 0.2, 0.2])

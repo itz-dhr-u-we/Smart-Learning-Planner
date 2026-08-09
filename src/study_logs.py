@@ -21,7 +21,7 @@ def render_study_logs_tab():
 
         # --- SECTION 1: ADD NEW STUDY LOG FORM ---
         with st.form("add_study_log_form"):
-            st.subheader("✍️ Write a New Log Entry")
+            st.subheader("Write a New Log Entry")
             
             selected_sub_name = st.selectbox("Select Subject", list(subject_options.keys()))
             selected_sub_id = subject_options[selected_sub_name]
@@ -53,7 +53,7 @@ def render_study_logs_tab():
         st.markdown("---")
 
         # --- SECTION 2: VIEW AND FILTER PAST LOGS ---
-        st.subheader("📖 Past Reflection Logs")
+        st.subheader("Past Reflection Logs")
         
         time_filter = st.selectbox(
             "Filter History By", 

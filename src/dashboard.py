@@ -16,7 +16,7 @@ def render_dashboard_tab():
         db.commit()
 
     stored_date = datetime_lib.datetime.strptime(db_user.global_exam_start, "%Y-%m-%d").date()
-    with st.expander("⚙️ Global Exam Block Window Settings", expanded=False):
+    with st.expander("Global Exam Block Window Settings", expanded=False):
         new_global_date = st.date_input("Semester Theory Exams Start Date", value=stored_date)
         if str(new_global_date) != db_user.global_exam_start:
             db_user.global_exam_start = str(new_global_date)
@@ -65,9 +65,9 @@ def render_dashboard_tab():
 
             with st.container():
                 if rank <= 2 and item["remaining_topics"] > 0:
-                    st.markdown(f"### ⚡ Process [CPU Focus]: {sub.name} ({sub.category})")
+                    st.markdown(f"Process: {sub.name} ({sub.category})")
                 else:
-                    st.markdown(f"#### 📖 {sub.name} ({sub.category})")
+                    st.markdown(f"📖 {sub.name} ({sub.category})")
 
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Readiness", f"{readiness_score}%")
