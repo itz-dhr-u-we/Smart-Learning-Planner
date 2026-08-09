@@ -22,6 +22,47 @@ def delete_topic(topic_id):
         db.delete(t)
         db.commit()
     db.close()
+def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
+    """Extracts text via pypdf; if empty (scanned/handwritten), uploads directly to Gemini for multimodal processing."""
+    if not file_path or not os.path.exists(file_path):
+        return None, "File not found."
+
+    extracted_text = ""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(file_path)
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                extracted_text += t + "\n"
+    except Exception:
+        pass
+
+    # If pypdf extracted text successfully, use it
+    if extracted_text.strip():
+        return extracted_text[:12000], "text"
+
+    # Fallback: If text is empty (scanned image or handwritten), use Gemini File API
+    try:
+        from google import genai
+        api_key = os.environ.get("GEMINI_API_KEY")
+        client = genai.Client(api_key=api_key) if api_key else genai.Client()
+
+        # Upload the PDF file directly to Gemini
+        with st.spinner("Detected scanned/handwritten PDF. Uploading to Gemini vision engine..."):
+            uploaded_file = client.files.upload(file=file_path)
+
+            prompt = f"Extract all text, formulas, notes, and concepts from this document regarding {sub_name}"
+            if topic_name:
+                prompt += f", specifically focusing on {topic_name}."
+
+            response = client.models.generate_content(
+                model='gemini-3.5-flash',
+                contents=[uploaded_file, prompt]
+            )
+            return response.text, "multimodal"
+    except Exception as e:
+        return None, str(e)
 
 def render_manage_subjects_tab():
     db = SessionLocal()
@@ -151,24 +192,20 @@ def render_manage_subjects_tab():
                                 selected_file = col_res2.selectbox("Select PDF File", available_pdfs, key=f"select_pdf_{res.id}")
                                 if st.button(f"✨ Summarize", key=f"sum_btn_{res.id}"):
                                     with st.spinner("Extracting and summarizing PDF text..."):
-                                        target_path = os.path.join(upload_dir, selected_file)
-                                        pdf_texts = ""
-                                        if os.path.exists(target_path):
-                                            try:
-                                                from pypdf import PdfReader
-                                                reader = PdfReader(target_path)
-                                                for page in reader.pages:
-                                                    extracted = page.extract_text()
-                                                    if extracted:
-                                                        pdf_texts += extracted + "\n"
-                                            except Exception as err:
-                                                st.error(f"Error: {err}")
-                                        if pdf_texts:
-                                            summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=pdf_texts[:12000])
+                                        target_path = res.content_path_or_link if (res.content_path_or_link and os.path.exists(res.content_path_or_link)) else os.path.join("data", "uploads", selected_file)
+
+                                        content_result, mode = extract_text_from_pdf_robust(target_path, sub.name)
+                                        if content_result:
+                                            if mode == "text":
+                                                summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=content_result)
+                                            else:
+                                                summary_result = content_result  # Gemini already processed it directly
+
                                             st.markdown(f"### 📝 Exam Summary")
                                             st.info(summary_result)
                                         else:
-                                            st.warning("Could not read text from the selected PDF file.")
+                                            st.warning("Could not process this PDF. Ensure it is a valid document file.")
+                                        
                 
                 st.markdown("---")
 
@@ -185,16 +222,11 @@ def render_manage_subjects_tab():
                         with st.spinner("Analyzing lecture notes and consulting knowledge base..."):
                             pdf_texts = ""
                             for r in subject_resources:
-                                if r.content_path_or_link and os.path.exists(r.content_path_or_link):
-                                    try:
-                                        from pypdf import PdfReader
-                                        reader = PdfReader(r.content_path_or_link)
-                                        for page in reader.pages:
-                                            extracted = page.extract_text()
-                                            if extracted:
-                                                pdf_texts += extracted + "\n"
-                                    except:
-                                        pass
+                                if r.content_path_or_link:
+                                    extracted = extract_text_from_pdf(r.content_path_or_link)
+                                    if extracted:
+                                        pdf_texts += extracted + "\n"
+
                             ai_advice = get_resource_suggestion(sub.name, t.name, pdf_context=pdf_texts[:8000] if pdf_texts else None)
                             st.info(ai_advice)
 
