@@ -49,11 +49,10 @@ def render_dashboard_tab():
         for rank, item in enumerate(processed_subjects, start=1):
             sub = item["sub_obj"]
             total_topics = item["total_topics"]
-            covered_topics = item["covered_topics"]
+            readiness_score = item["readiness_score"]  # Now derived from 1-10 confidence scale avg
+            remaining_topics = item["remaining_topics"]
             days_left = item["days_left"]
             
-            topic_pct = (covered_topics / total_topics) if total_topics > 0 else 0.0
-            readiness_score = int(topic_pct * 100)
 
             date_label = f"{item['effective_date']} {'(Custom)' if item['is_individual'] else '(Block Window)'}"
             
@@ -65,14 +64,14 @@ def render_dashboard_tab():
                 timeline_msg = f"⏳ {days_left} days left"
 
             with st.container():
-                if rank <= 2 and item["remaining_topics"] > 0:
-                    st.markdown(f"Process: {sub.name} ({sub.category})")
+                if rank <= 2 and remaining_topics > 0:
+                    st.markdown(f"High Priority Process: {sub.name} (`{sub.category}`)")
                 else:
-                    st.markdown(f"📖 {sub.name} ({sub.category})")
+                    st.markdown(f"📖 {sub.name} (`{sub.category}`)")
 
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Readiness", f"{readiness_score}%")
-                c2.metric("Remaining Topics", item["remaining_topics"])
+                c1.metric("Readiness Score", f"{readiness_score}%")
+                c2.metric("Topics Needing Review", remaining_topics)
                 c3.metric("Target Date", date_label)
                 c4.metric("Timeline", timeline_msg)
 
@@ -88,20 +87,17 @@ def render_dashboard_tab():
         st.subheader("Workload & Completion Analytics")
         chart_data = []
         for item in processed_subjects:
-            sub= item["sub_obj"]
-            tot = item["total_topics"]
-            cov = item["covered_topics"]
-            rem = item["remaining_topics"]
+            sub = item["sub_obj"]
             chart_data.append({
                 "Subject": sub.name,
-                "Covered Topics": cov,
-                "Remaining Topics": rem
+                "Readiness Score (%)": item["readiness_score"],
+                "Low Confidence Topics": item["remaining_topics"]
             })
         
         df_chart = pd.DataFrame(chart_data)
         if not df_chart.empty:
-            st.caption("Covered vs Remaining Topics per Course")
-            st.bar_chart(df_chart.set_index("Subject")[["Covered Topics","Remaining Topics"]])
+            st.caption("Overall Subject Readiness Overview (%)")
+            st.bar_chart(df_chart.set_index("Subject")[["Readiness Score (%)", "Low Confidence Topics"]])
         else:
             st.info("Add topics to subjects to view analytics.")
 
@@ -117,20 +113,19 @@ def render_dashboard_tab():
             selected_data = subject_options_map[choosen_subject_name]
             sel_sub = selected_data["sub_obj"]
             sel_tot = selected_data["total_topics"]
-            sel_cov = selected_data["covered_topics"]
             sel_rem = selected_data["remaining_topics"]
+            sel_score = selected_data["readiness_score"]
             sel_days = selected_data["days_left"]
             sel_date = selected_data["effective_date"]
 
-            sel_pct = (sel_cov / sel_tot) if sel_tot > 0 else 0.0
-            sel_score = int(sel_pct * 100)
+            sel_pct = sel_score / 100.0
 
             with st.container(border=True):
                 st.markdown(f"📖 {sel_sub.name} (`{sel_sub.category}` — {sel_sub.credits} Credits)")
                 
                 sc1, sc2, sc3, sc4 = st.columns(4)
                 sc1.metric("Readiness Score", f"{sel_score}%")
-                sc2.metric("Topics Covered", f"{sel_cov} / {sel_tot}")
+                sc2.metric("Total Topics", f"{sel_tot} topics")
                 sc3.metric("Remaining Topics", f"{sel_rem} topics")
                 sc4.metric("Days Left", f"{sel_days} days", f"Target: {sel_date}")
 

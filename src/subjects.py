@@ -2,17 +2,15 @@ import streamlit as st
 import os
 import datetime as datetime_lib
 from datetime import date
-from src.database import SessionLocal, subject, usersubject, topic, Resource
+from src.database import SessionLocal, subject, usersubject, topic, Resource, PlaylistVideo
 from src.helper import get_resource_suggestion
 
-def update_topic_status(topic_id):
+def update_topic_confidence(topic_id, score):
     db = SessionLocal()
     t = db.query(topic).filter(topic.id == topic_id).first()
     if t:
-        key = f"covered_{topic_id}"
-        if key in st.session_state:
-            t.is_covered = st.session_state[key]
-            db.commit()
+        t.confidence_score = score
+        db.commit()
     db.close()
 
 def delete_topic(topic_id):
@@ -22,6 +20,7 @@ def delete_topic(topic_id):
         db.delete(t)
         db.commit()
     db.close()
+    
 def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
     """Extracts text via pypdf; if empty (scanned/handwritten), uploads directly to Gemini for multimodal processing."""
     if not file_path or not os.path.exists(file_path):
@@ -38,17 +37,14 @@ def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
     except Exception:
         pass
 
-    # If pypdf extracted text successfully, use it
     if extracted_text.strip():
         return extracted_text[:12000], "text"
 
-    # Fallback: If text is empty (scanned image or handwritten), use Gemini File API
     try:
         from google import genai
         api_key = os.environ.get("GEMINI_API_KEY")
         client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
-        # Upload the PDF file directly to Gemini
         with st.spinner("Detected scanned/handwritten PDF. Uploading to Gemini vision engine..."):
             uploaded_file = client.files.upload(file=file_path)
 
@@ -57,7 +53,7 @@ def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
                 prompt += f", specifically focusing on {topic_name}."
 
             response = client.models.generate_content(
-                model='gemini-3.5-flash',
+                model='gemini-2.5-flash',
                 contents=[uploaded_file, prompt]
             )
             return response.text, "multimodal"
@@ -114,10 +110,11 @@ def render_manage_subjects_tab():
     else:
         for enr in enrollments:
             sub = db.query(subject).filter(subject.id == enr.subject_id).first()
+            if not sub:
+                continue
             exam_info = f" | Exam Date: {enr.exam_date}" if enr.exam_date else ""
             with st.expander(f"{sub.name} ({sub.category}) - {sub.credits} Credits{exam_info}"):
                 
-                # --- EDIT SUBJECT FORM ---
                 with st.form(f"edit_subject_form_{sub.id}"):
                     st.write("✏️ Edit Subject Details")
                     new_sub_name = st.text_input("Subject Name", value=sub.name, key=f"edit_name_{sub.id}")
@@ -145,14 +142,69 @@ def render_manage_subjects_tab():
 
                 st.markdown("---")
                 
+                # --- TOPIC MANAGEMENT & AI GUIDE ---
+                st.markdown("🎯 Topics & Confidence Scale (1-10)")
+                topics = db.query(topic).filter(topic.subject_id == sub.id).all()
+                if not topics:
+                    st.info("No topics added yet. Add topics below to map your syllabus.")
+                else:
+                    for t in topics:
+                        col1, col2, col3 = st.columns([0.6, 0.2, 0.2])
+                        col1.write(f"{t.name}")
+                        new_score = col2.slider(
+                            "Confidence", 
+                            min_value=1, 
+                            max_value=10, 
+                            value=t.confidence_score, 
+                            key=f"conf_slider_{t.id}",
+                            label_visibility="collapsed"
+                        )
+                        if new_score != t.confidence_score:
+                            update_topic_confidence(t.id, new_score)
+                        
+                        col2.caption(f"Score: {t.confidence_score}/10")
+
+                        if col3.button("🗑️ Delete", key=f"delete_topic_{t.id}"):
+                            delete_topic(t.id)
+                            st.success(f"Deleted topic '{t.name}'")
+                            st.rerun()
+
+                        if st.button(f"Ask AI Guide for '{t.name}'", key=f"ai_help_{t.id}"):
+                            with st.spinner("Analyzing lecture notes and consulting knowledge base..."):
+                                subject_resources = db.query(Resource).filter(Resource.subject_id == sub.id).all()
+                                
+                                pdf_texts = ""
+                                for r in subject_resources:
+                                    if r.content_path_or_link and r.content_path_or_link.lower().endswith('.pdf'):
+                                        extracted, _ = extract_text_from_pdf_robust(r.content_path_or_link, sub.name, t.name)
+                                        if extracted:
+                                            pdf_texts += extracted + "\n"
+
+                                ai_advice = get_resource_suggestion(sub.name, t.name, pdf_context=pdf_texts[:8000] if pdf_texts else None)
+                                st.info(ai_advice)
+
+                with st.form(f"add_topic_form_{sub.id}"):
+                    new_topic_name = st.text_input("New Sub-Topic Name", key=f"new_topic_{sub.id}")
+                    if st.form_submit_button("Add Topic") and new_topic_name:
+                        db.add(topic(subject_id=sub.id, name=new_topic_name, confidence_score=1))
+                        db.commit()
+                        st.success("Topic added successfully!")
+                        st.rerun()
+                
                 # --- COURSE RESOURCES & SUMMARIZER HUB ---
-                st.markdown("📚 Course Resources & Playlist Tracker")
+                st.markdown("📚 Subject Resources & Playlist Tracker")
                 
                 with st.form(f"add_resource_form_{sub.id}"):
                     res_type = st.selectbox("Resource Type", ["PDF Slides / Notes", "Reference Book / Chapter", "YouTube Playlist"], key=f"res_type_{sub.id}")
                     res_title = st.text_input("Resource Title (e.g., Lecture Notes)", key=f"res_title_{sub.id}")
+                    
+                    topic_options = {t.name: t.id for t in topics}
+                    topic_choices = ["General Subject Resource"] + list(topic_options.keys())
+                    selected_topic_choice = st.selectbox("Map to Topic (Optional)", topic_choices, key=f"res_topic_map_{sub.id}")
+
                     uploaded_file = st.file_uploader("Upload PDF Notes (Optional)", type=["pdf"], key=f"pdf_upload_{sub.id}")
                     res_link_or_path = st.text_input("Alternative YouTube URL or Details", key=f"res_link_{sub.id}")
+                    res_conf = st.slider("Initial Resource Confidence Score", 1, 10, 1, key=f"res_conf_{sub.id}")
 
                     submit_res = st.form_submit_button("Add Resource")
                     if submit_res and res_title:
@@ -164,7 +216,17 @@ def render_manage_subjects_tab():
                             with open(path_to_store, "wb") as f:
                                 f.write(uploaded_file.getbuffer())
 
-                        db.add(Resource(subject_id=sub.id, resource_type=res_type, title=res_title, content_path_or_link=path_to_store))
+                        t_id = topic_options.get(selected_topic_choice) if selected_topic_choice != "General Subject Resource" else None
+
+                        new_res = Resource(
+                            subject_id=sub.id, 
+                            topic_id=t_id,
+                            resource_type=res_type, 
+                            title=res_title, 
+                            content_path_or_link=path_to_store,
+                            confidence_score=res_conf
+                        )
+                        db.add(new_res)
                         db.commit()
                         st.success("Resource added successfully!")
                         st.rerun()
@@ -173,13 +235,10 @@ def render_manage_subjects_tab():
                 subject_resources = db.query(Resource).filter(Resource.subject_id == sub.id).all()
                 if subject_resources:
                     st.write("📂 Existing Resources:")
-                    base_dir = os.path.dirname(os.path.abspath(__file__))
-                    upload_dir = os.path.join(base_dir, "..", "data", "uploads")
-                    available_pdfs = [f for f in os.listdir(upload_dir) if f.lower().endswith('.pdf')] if os.path.exists(upload_dir) else []
-
+                    
                     for res in subject_resources:
-                        col_res1, col_res2, col_res3 = st.columns([0.5, 0.25, 0.25])
-                        col_res1.write(f"**[{res.resource_type}]** {res.title}")
+                        col_res1, col_res2, col_res3 = st.columns([0.5, 0.3, 0.2])
+                        col_res1.write(f"**[{res.resource_type}]** {res.title} (Conf: {res.confidence_score}/10)")
                         
                         if col_res3.button("🗑️ Delete", key=f"del_res_{res.id}"):
                             db.delete(res)
@@ -187,55 +246,17 @@ def render_manage_subjects_tab():
                             st.success(f"Deleted '{res.title}'")
                             st.rerun()
 
-                        if "PDF" in res.resource_type or (res.content_path_or_link and res.content_path_or_link.endswith('.pdf')):
-                            if available_pdfs:
-                                selected_file = col_res2.selectbox("Select PDF File", available_pdfs, key=f"select_pdf_{res.id}")
-                                if st.button(f"✨ Summarize", key=f"sum_btn_{res.id}"):
-                                    with st.spinner("Extracting and summarizing PDF text..."):
-                                        target_path = res.content_path_or_link if (res.content_path_or_link and os.path.exists(res.content_path_or_link)) else os.path.join("data", "uploads", selected_file)
+                        if res.content_path_or_link and res.content_path_or_link.endswith('.pdf'):
+                            if col_res2.button("✨ Summarize PDF", key=f"sum_pdf_{res.id}"):
+                                with st.spinner("Extracting and summarizing PDF text..."):
+                                    content_result, mode = extract_text_from_pdf_robust(res.content_path_or_link, sub.name)
+                                    if content_result:
+                                        summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=content_result)
+                                        st.markdown(f"### 📝 Exam Summary")
+                                        st.info(summary_result)
+                                    else:
+                                        st.warning("Could not process this PDF. Ensure it is a valid document file.")
 
-                                        content_result, mode = extract_text_from_pdf_robust(target_path, sub.name)
-                                        if content_result:
-                                            if mode == "text":
-                                                summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=content_result)
-                                            else:
-                                                summary_result = content_result  # Gemini already processed it directly
-
-                                            st.markdown(f"### 📝 Exam Summary")
-                                            st.info(summary_result)
-                                        else:
-                                            st.warning("Could not process this PDF. Ensure it is a valid document file.")
-                                        
-                
                 st.markdown("---")
-
-                # --- TOPIC MANAGEMENT & AI GUIDE ---
-                st.markdown("🎯 Topics")
-                topics = db.query(topic).filter(topic.subject_id == sub.id).all()
-                for t in topics:
-                    col1, col2, col3 = st.columns([0.6, 0.2, 0.2])
-                    col1.write(f"{t.name}")
-                    col2.checkbox("Covered", value=t.is_covered, key=f"covered_{t.id}", on_change=update_topic_status, args=(t.id,))
-                    col3.button("Delete", key=f"delete_{t.id}", on_click=delete_topic, args=(t.id,))
-
-                    if st.button(f"Ask AI Guide for '{t.name}'", key=f"ai_help_{t.id}"):
-                        with st.spinner("Analyzing lecture notes and consulting knowledge base..."):
-                            pdf_texts = ""
-                            for r in subject_resources:
-                                if r.content_path_or_link:
-                                    extracted = extract_text_from_pdf(r.content_path_or_link)
-                                    if extracted:
-                                        pdf_texts += extracted + "\n"
-
-                            ai_advice = get_resource_suggestion(sub.name, t.name, pdf_context=pdf_texts[:8000] if pdf_texts else None)
-                            st.info(ai_advice)
-
-                with st.form(f"add_topic_form_{sub.id}"):
-                    new_topic_name = st.text_input("New Topic Name", key=f"new_topic_{sub.id}")
-                    if st.form_submit_button("Add Topic") and new_topic_name:
-                        db.add(topic(subject_id=sub.id, name=new_topic_name))
-                        db.commit()
-                        st.success("Topic added successfully!")
-                        st.rerun()
 
     db.close()

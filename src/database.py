@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine, Column, Integer, Text, String, Float,Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker,relationship
 
 #db setup
 DB_URL = "sqlite:///./smart_learning_planner.db"
@@ -26,6 +26,8 @@ class subject(Base):
     name = Column(String,unique=True,index=True)
     category = Column(String) #Therory,Lab,Others
     credits = Column(Integer)
+    topics = relationship("topic", back_populates="subject", cascade="all, delete-orphan")
+    resources = relationship("Resource", back_populates="subject", cascade="all, delete-orphan")
 
 class usersubject(Base):
     __tablename__ = "user_subjects"
@@ -37,10 +39,12 @@ class usersubject(Base):
 class topic(Base):
     __tablename__ = "topics"
     id = Column(Integer,primary_key=True,index=True)
-    subject_id = Column(Integer,ForeignKey("subjects.id"))
-    name = Column(String)
-    is_covered = Column(Boolean,default = False)
-    confidence_score = Column(Float,default=0.0) # 1-10 scale
+    subject_id = Column(Integer,ForeignKey("subjects.id"),nullable=False)
+    name = Column(String,nullable=False)
+    confidence_score = Column(Integer,default=1) # 1-10 scale
+    subject = relationship("subject", back_populates="topics")
+    resources = relationship("Resource", back_populates="topic", cascade="all, delete-orphan")
+
 class study_log(Base):
     __tablename__ = "study_logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -53,17 +57,28 @@ class study_log(Base):
 class Resource(Base):
     __tablename__ = "resources"
     id = Column(Integer, primary_key=True, index=True)
-    subject_id = Column(Integer, ForeignKey("subjects.id"))
-    resource_type = Column(String) # "PDF", "Book", "YouTube"
-    title = Column(String)
-    content_path_or_link = Column(String) # File path for PDF or URL for YT/Book
+    subject_id = Column(Integer, ForeignKey("subjects.id"),nullable=False)
+    topic_id = Column(Integer, ForeignKey("topics.id"), nullable=True)
+    title = Column(String,nullable=False)
+    resource_type = Column(String,nullable=False) # "PDF", "Book", "YouTube"
+    
+    content_path_or_link = Column(String,nullable=True) # File path for PDF or URL for YT/Book
+    confidence_score = Column(Integer,default=1)
+
+    subject = relationship("subject",back_populates="resources")
+    topic = relationship("topic",back_populates="resources")
+    playlist_videos = relationship("PlaylistVideo", back_populates="resource", cascade="all, delete-orphan")
 
 class PlaylistVideo(Base):
     __tablename__ = "playlist_videos"
     id = Column(Integer, primary_key=True, index=True)
-    resource_id = Column(Integer, ForeignKey("resources.id"))
-    video_title = Column(String)
-    is_completed = Column(Boolean, default=False) # Manually ticked by student
+    resource_id = Column(Integer, ForeignKey("resources.id"),nullable=False)
+    video_title = Column(String,nullable=False)
+    video_url = Column(String, nullable=True)  # Individual link for the parsed playlist video
+    confidence_score = Column(Integer, default=1)  # 1-10 scale for individual video tracking
+    is_completed = Column(Boolean, default=False)  # Manually ticked by student
+
+    resource = relationship("Resource", back_populates="playlist_videos")
 
 def init_db():
     Base.metadata.create_all(bind = engine)
