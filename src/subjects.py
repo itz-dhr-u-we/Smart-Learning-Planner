@@ -234,7 +234,8 @@ def render_manage_subjects_tab():
                                     resource_type=res_type, 
                                     title=res_title, 
                                     content_path_or_link=path_to_store,
-                                    confidence_score=res_conf
+                                    confidence_score=res_conf,
+                                    created_at=datetime_lib.datetime.now().strftime("%Y-%m-%d %H:%M")
                                 )
                                 db.add(new_res)
                                 db.commit()
@@ -244,41 +245,108 @@ def render_manage_subjects_tab():
                     # Display existing resources with Delete and Summarize options
                     subject_resources = db.query(Resource).filter(Resource.subject_id == sub.id).all()
                     if subject_resources:
-                        st.write("📂 Existing Resources:")
 
-                        for res in subject_resources:
-                            with st.container(border = True):
-                                col_res1, col_res2, col_res3 = st.columns([0.5, 0.3, 0.2])
-                                col_res1.write(f"**[{res.resource_type}]** {res.title} (Conf: {res.confidence_score}/10)")
+                        st.write("📂 Filter & View Resources:")
+                    
+                        # Filter controls side-by-side
+                        f_col1, f_col2 = st.columns(2)
 
-                                # Independent resource confidence score slider
-                                new_res_conf = col_res2.slider(
-                                    "Self-Track", 
-                                    min_value=1, 
-                                    max_value=10, 
-                                    value=res.confidence_score, 
-                                    key=f"edit_res_conf_{res.id}"
-                                )
-                                if new_res_conf != res.confidence_score:
-                                    update_resource_confidence(res.id, new_res_conf)
-                                    st.rerun()
+                        # 1. Topic Filter options
+                        topic_filter_options = ["All Resources", "General Subject Resources"] + [t.name for t in topics]
+                        selected_topic_filter = f_col1.selectbox("Filter by Topic", topic_filter_options, key=f"filter_topic_{sub.id}")
 
-                                if col_res3.button("🗑️ Delete", key=f"del_res_{res.id}"):
-                                    db.delete(res)
-                                    db.commit()
-                                    st.success(f"Deleted '{res.title}'")
-                                    st.rerun()
+                        # 2. Time Range Filter options
+                        time_filter_options = ["All Time", "Last 7 Days", "Last 30 Days", "Last 3 Months"]
+                        selected_time_filter = f_col2.selectbox("Filter by Upload Date", time_filter_options, key=f"filter_time_{sub.id}")
+                        # Apply Topic Filter
+                        topic_filtered = []
+                        if selected_topic_filter == "General Subject Resources":
+                            topic_filtered = [r for r in subject_resources if r.topic_id is None]
+                        elif selected_topic_filter != "All Resources":
+                            target_topic = next((t for t in topics if t.name == selected_topic_filter), None)
+                            if target_topic:
+                                topic_filtered = [r for r in subject_resources if r.topic_id == target_topic.id]
+                            else:
+                                topic_filtered = []
+                        else:
+                            topic_filtered = subject_resources
 
-                                if res.content_path_or_link and res.content_path_or_link.endswith('.pdf'):
-                                    if col_res2.button("✨ Summarize PDF", key=f"sum_pdf_{res.id}"):
-                                        with st.spinner("Extracting and summarizing PDF text..."):
-                                            content_result, mode = extract_text_from_pdf_robust(res.content_path_or_link, sub.name)
-                                            if content_result:
-                                                summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=content_result)
-                                                st.markdown(f"### 📝 Exam Summary")
-                                                st.info(summary_result)
-                                            else:
-                                                st.warning("Could not process this PDF. Ensure it is a valid document file.")
+                        # Apply Time Filter
+                        filtered_resources = []
+                        now = datetime_lib.datetime.now()
+
+                        for res in topic_filtered:
+                            include = True
+                            if res.created_at and selected_time_filter != "All Time":
+                                try:
+                                    res_dt = datetime_lib.datetime.strptime(res.created_at, "%Y-%m-%d %H:%M")
+                                    diff_days = (now - res_dt).days
+
+                                    if selected_time_filter == "Last 7 Days" and diff_days > 7:
+                                        include = False
+                                    elif selected_time_filter == "Last 30 Days" and diff_days > 30:
+                                        include = False
+                                    elif selected_time_filter == "Last 3 Months" and diff_days > 90:
+                                        include = False
+                                except:
+                                    pass
+                            if include:
+                                filtered_resources.append(res)
+
+
+                        if filtered_resources:
+                            st.write("📂 Attached Resources Library:")
+                            for res in filtered_resources:
+                                with st.container(border=True):
+                                    # 4 columns: Date, Name, Confidence Slider, Delete
+                                    col_date, col_name, col_conf, col_del = st.columns([0.22, 0.38, 0.25, 0.15])
+
+                                    # Upload Date
+                                    upload_date = res.created_at.split()[0] if res.created_at else "N/A"
+                                    col_date.caption(f"📅 {upload_date}")
+
+                                    # Resource Name & Type
+                                    col_name.write(f"**[{res.resource_type}]**\n{res.title}")
+
+                                    # Confidence Score Slider
+                                    new_res_conf = col_conf.slider(
+                                        "Conf", 
+                                        min_value=1, 
+                                        max_value=10, 
+                                        value=res.confidence_score, 
+                                        key=f"edit_res_conf_{res.id}",
+                                        label_visibility="collapsed"
+
+                                    )
+                                    if new_res_conf != res.confidence_score:
+                                        update_resource_confidence(res.id, new_res_conf)
+                                        st.rerun()
+                                    col_conf.caption(f"Score: {res.confidence_score}/10")
+
+                                    # Delete Option
+                                    if col_del.button("🗑️ Delete", key=f"del_res_{res.id}"):
+                                        db.delete(res)
+                                        db.commit()
+                                        st.success(f"Deleted '{res.title}'")
+                                        st.rerun()
+
+                                    # Optional PDF Summarize button underneath if it's a PDF
+                                    if res.content_path_or_link and res.content_path_or_link.lower().endswith('.pdf'):
+                                        if st.button("✨ Summarize PDF", key=f"sum_pdf_{res.id}"):
+                                            with st.spinner("Extracting and summarizing PDF text..."):
+                                                content_result, mode = extract_text_from_pdf_robust(res.content_path_or_link, sub.name)
+                                                if content_result:
+                                                    summary_result = get_resource_suggestion(sub.name, topic_name=None, pdf_context=content_result)
+                                                    st.markdown("### 📝 Exam Summary")
+                                                    st.info(summary_result)
+                                                else:
+                                                    st.warning("Could not process this PDF file.")
+                        else:
+                            st.info("No resources found matching your filters.")
+                    else:
+                        st.info("No resources found matching your filters.")
+                        ###
+                        
 
                     st.markdown("---")
 

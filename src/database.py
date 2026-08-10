@@ -2,7 +2,7 @@ import os
 from sqlalchemy import create_engine, Column, Integer, Text, String, Float,Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker,relationship
-
+import datetime as datetime_lib
 #db setup
 DB_URL = "sqlite:///./smart_learning_planner.db"
 engine = create_engine(DB_URL,connect_args={"check_same_thread": False})
@@ -64,6 +64,7 @@ class Resource(Base):
     
     content_path_or_link = Column(String,nullable=True) # File path for PDF or URL for YT/Book
     confidence_score = Column(Integer,default=1)
+    created_at = Column(String,nullable=False, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
 
     subject = relationship("subject",back_populates="resources")
     topic = relationship("topic",back_populates="resources")
