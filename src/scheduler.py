@@ -32,10 +32,10 @@ def calculate_subject_priorities(enrollments,db_session,subject_model,topic_mode
         #calculate deadline(days left)
         days_left = (effective_date - date.today()).days
         
-        if days_left <= 0:
-            urgency_score = 9999
-        else:
-            urgency_score = (remaining_topics * 10)/days_left
+        #if days_left <= 0:
+        #    urgency_score = 9999
+        #else:
+        #    urgency_score = (remaining_topics * 10)/days_left
         
         scheduled_processes.append({
             "sub_obj": sub,                # The database subject object
@@ -47,10 +47,9 @@ def calculate_subject_priorities(enrollments,db_session,subject_model,topic_mode
             "remaining_topics": remaining_topics,
             "effective_date": effective_date,
             "is_individual": is_individual_date,
-            "days_left": days_left,
-            "priority_weight": urgency_score
+            "days_left": days_left
         })
 
-        scheduled_processes = sorted(scheduled_processes,key = lambda x:x["priority_weight"],reverse=True)
+    scheduled_processes.sort(key = lambda x: (x["days_left"], -x["remaining_topics"]))
 
-        return scheduled_processes
+    return scheduled_processes

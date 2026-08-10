@@ -3,6 +3,7 @@ import datetime as datetime_lib
 from datetime import date
 from src.database import SessionLocal, user, usersubject, study_log, topic, subject
 from src.scheduler import calculate_subject_priorities
+import pandas as pd
 
 def render_dashboard_tab():
     db = SessionLocal()
@@ -43,7 +44,7 @@ def render_dashboard_tab():
         )
 
         st.subheader("Daily Focus & Priorities")
-        st.write(f"Active Global Block Start: **{global_exam_start_val}**")
+        st.write(f"Active Global Exam Start: **{global_exam_start_val}**")
         
         for rank, item in enumerate(processed_subjects, start=1):
             sub = item["sub_obj"]
@@ -83,10 +84,69 @@ def render_dashboard_tab():
                     st.error("🔴 Status: High Priority Bottleneck. Recommended focus for today.")
 
                 st.markdown("---")
+        # Workload and completion analysis chart
+        st.subheader("Workload & Completion Analytics")
+        chart_data = []
+        for item in processed_subjects:
+            sub= item["sub_obj"]
+            tot = item["total_topics"]
+            cov = item["covered_topics"]
+            rem = item["remaining_topics"]
+            chart_data.append({
+                "Subject": sub.name,
+                "Covered Topics": cov,
+                "Remaining Topics": rem
+            })
+        
+        df_chart = pd.DataFrame(chart_data)
+        if not df_chart.empty:
+            st.caption("Covered vs Remaining Topics per Course")
+            st.bar_chart(df_chart.set_index("Subject")[["Covered Topics","Remaining Topics"]])
+        else:
+            st.info("Add topics to subjects to view analytics.")
+
+        st.markdown("---")
+
+        #individual subject dropdown
+        st.subheader("Individual Enrollment Status")
+        
+        subject_options_map = {item["name"]: item for item in processed_subjects}
+        choosen_subject_name = st.selectbox("Choose Enrolled Subject", list(subject_options_map.keys()))
+
+        if choosen_subject_name:
+            selected_data = subject_options_map[choosen_subject_name]
+            sel_sub = selected_data["sub_obj"]
+            sel_tot = selected_data["total_topics"]
+            sel_cov = selected_data["covered_topics"]
+            sel_rem = selected_data["remaining_topics"]
+            sel_days = selected_data["days_left"]
+            sel_date = selected_data["effective_date"]
+
+            sel_pct = (sel_cov / sel_tot) if sel_tot > 0 else 0.0
+            sel_score = int(sel_pct * 100)
+
+            with st.container(border=True):
+                st.markdown(f"📖 {sel_sub.name} (`{sel_sub.category}` — {sel_sub.credits} Credits)")
+                
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1.metric("Readiness Score", f"{sel_score}%")
+                sc2.metric("Topics Covered", f"{sel_cov} / {sel_tot}")
+                sc3.metric("Remaining Topics", f"{sel_rem} topics")
+                sc4.metric("Days Left", f"{sel_days} days", f"Target: {sel_date}")
+
+                st.progress(sel_pct)
+
+                if sel_score >= 80:
+                    st.success("🟢 Status: Course execution is optimized and well on track.")
+                elif sel_score >= 40:
+                    st.warning("🟡 Status: Moderate workload. Keep knocking out pending topics.")
+                else:
+                    st.error("🔴 Status: High priority bottleneck. Requires immediate study focus.")
+
+        st.markdown("---")
 
         st.subheader("📈 Study Consistency Line Graph")
         if all_logs:
-            import pandas as pd
             log_data = [{"Date": log.timestamp.split()[0], "Minutes": log.duration_minutes} for log in all_logs if log.timestamp]
             df_logs = pd.DataFrame(log_data)
             df_grouped = df_logs.groupby("Date").sum().reset_index().sort_values("Date")
