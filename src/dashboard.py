@@ -75,7 +75,9 @@ def render_dashboard_tab():
                 c3.metric("Target Date", date_label)
                 c4.metric("Timeline", timeline_msg)
 
-                if readiness_score >= 80:
+                if total_topics == 0:
+                    st.warning("🔔 Kindly add some topics!")
+                elif readiness_score >= 80:
                     st.success("🟢 Status: Process Optimized / On Track.")
                 elif readiness_score >= 40:
                     st.warning("🟡 Status: Moderate Load. Keep clearing pending topics.")
@@ -131,7 +133,9 @@ def render_dashboard_tab():
 
                 st.progress(sel_pct)
 
-                if sel_score >= 80:
+                if total_topics == 0:
+                    st.warning("🔔 Kindly add some topics!")
+                elif sel_score >= 80:
                     st.success("🟢 Status: Course execution is optimized and well on track.")
                 elif sel_score >= 40:
                     st.warning("🟡 Status: Moderate workload. Keep knocking out pending topics.")
