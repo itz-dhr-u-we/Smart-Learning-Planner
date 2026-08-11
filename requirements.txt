@@ -3,3 +3,4 @@ google-genai
 sqlalchemy
 pandas
 numpy
+python-dotenv
