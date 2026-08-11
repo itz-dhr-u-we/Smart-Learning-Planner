@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta
 from google import genai
 from src.database import SessionLocal, study_log, subject, usersubject
+from src.cache_helper import get_cached_audit,set_cached_audit
 
 def render_ai_auditor_tab():
     st.title("🤖 AI Study Audit & Mentorship")
@@ -100,9 +101,12 @@ def render_ai_auditor_tab():
                     api_key = os.environ.get("GEMINI_API_KEY")
                     client = genai.Client(api_key=api_key) if api_key else genai.Client()
                     response = client.models.generate_content(
-                        model='gemini-3.5-flash',
+                        model='gemini-3.6-flash',
                         contents=prompt,
                     )
+                    #saving to cache
+                    set_cached_audit(selected_target,log_summary_text,response.text)
+
                     st.subheader(f"7-Day AI Insights: {selected_target}")
                     st.markdown(response.text)
                 except Exception as e:

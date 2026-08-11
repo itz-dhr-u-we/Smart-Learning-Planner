@@ -36,7 +36,7 @@ def get_ai_tutor_response(subject_name, chat_history_list):
 
     try:
         response = client.models.generate_content(
-            model='gemini-3.5-flash',
+            model='gemini-3.6-flash',
             contents=prompt,
         )
         return response.text
@@ -79,7 +79,7 @@ def get_resource_suggestion(subject_name, topic_name,pdf_context=None):
 
     try:
         response = client.models.generate_content(
-            model='gemini-3.5-flash',
+            model='gemini-3.6-flash',
             contents=prompt,
         )
         return response.text

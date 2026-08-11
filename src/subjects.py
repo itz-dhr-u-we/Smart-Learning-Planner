@@ -61,7 +61,7 @@ def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
                 prompt += f", specifically focusing on {topic_name}."
 
             response = client.models.generate_content(
-                model='gemini-3.5-flash',
+                model='gemini-3.6-flash',
                 contents=[uploaded_file, prompt]
             )
             return response.text, "multimodal"
