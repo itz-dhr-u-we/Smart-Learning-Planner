@@ -4,6 +4,46 @@ from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
+def get_ai_tutor_response(subject_name, chat_history_list):
+    """
+    Generates a concise, conversational tutor response tailored for study log chats.
+    """
+    client = genai.Client()
+    
+    # Format the ongoing conversation history cleanly for the model
+    formatted_history = ""
+    for msg in chat_history_list:
+        if isinstance(msg, dict):
+            role = "Student" if msg.get("role") == "user" else "AI Tutor"
+            content = msg.get("content", "")
+        else:
+            role = "Student"
+            content = str(msg)
+        formatted_history += f"{role}: {content}\n"
+
+    prompt = f"""
+    You are an expert, concise engineering study companion helping a student with '{subject_name}'.
+    
+    Here is the ongoing conversation history:
+    {formatted_history}
+    
+    INSTRUCTIONS:
+    - Keep your response brief, conversational, and direct (max 2-3 short paragraphs).
+    - Answer the student's exact question or address their specific roadblock immediately (e.g., if they ask about computer network handshakes vs architecture tiers, give a crisp, accurate comparison).
+    - Do NOT generate massive markdown study guides, long outlines, or textbook summaries.
+    - End with a short, engaging follow-up question or quick check to test their understanding.
+    """
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        return f"AI Tutor is temporarily unavailable. (Error: {str(e)})"
+
+
 def get_resource_suggestion(subject_name, topic_name,pdf_context=None):
     """
     Uses Gemini to dynamically generate targeted study recommendations, 

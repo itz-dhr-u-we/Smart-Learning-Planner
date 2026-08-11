@@ -28,6 +28,7 @@ class subject(Base):
     credits = Column(Integer)
     topics = relationship("topic", back_populates="subject", cascade="all, delete-orphan")
     resources = relationship("Resource", back_populates="subject", cascade="all, delete-orphan")
+    study_logs = relationship("study_log", back_populates="subject", cascade="all, delete-orphan")
 
 class usersubject(Base):
     __tablename__ = "user_subjects"
@@ -50,9 +51,14 @@ class study_log(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     subject_id = Column(Integer, ForeignKey("subjects.id"))
-    duration_minutes = Column(Integer, default=25)
-    timestamp = Column(String, nullable=True) # Stored date/time string
+    duration_minutes = Column(Integer,nullable=True, default=25)
+    
     notes = Column(Text, nullable=True)
+    created_at = Column(String, nullable=False, default=lambda: datetime_lib.datetime.now().strftime("%Y-%m-%d %H:%M"))
+    # Store AI conversation history as JSON/string if needed, or query dynamically
+    ai_chat_history = Column(String, nullable=True) # Stores serialized chat messages
+
+    subject = relationship("subject", back_populates="study_logs")
 
 class Resource(Base):
     __tablename__ = "resources"
@@ -64,8 +70,8 @@ class Resource(Base):
     
     content_path_or_link = Column(String,nullable=True) # File path for PDF or URL for YT/Book
     confidence_score = Column(Integer,default=1)
-    created_at = Column(String,nullable=False, default=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
-
+    created_at = Column(String,nullable=False, default=lambda: datetime_lib.datetime.now().strftime("%Y-%m-%d %H:%M"))
+    
     subject = relationship("subject",back_populates="resources")
     topic = relationship("topic",back_populates="resources")
     playlist_videos = relationship("PlaylistVideo", back_populates="resource", cascade="all, delete-orphan")

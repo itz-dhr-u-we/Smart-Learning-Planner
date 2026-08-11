@@ -146,7 +146,7 @@ def render_dashboard_tab():
 
         st.subheader("📈 Study Consistency Line Graph")
         if all_logs:
-            log_data = [{"Date": log.timestamp.split()[0], "Minutes": log.duration_minutes} for log in all_logs if log.timestamp]
+            log_data = [{"Date": log.created_at.split()[0], "Minutes": log.duration_minutes} for log in all_logs if log.created_at]
             df_logs = pd.DataFrame(log_data)
             df_grouped = df_logs.groupby("Date").sum().reset_index().sort_values("Date")
             st.line_chart(df_grouped.set_index("Date"))
