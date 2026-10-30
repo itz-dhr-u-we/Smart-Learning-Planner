@@ -1,156 +1,414 @@
+
 import streamlit as st
-import datetime as datetime_lib
-from datetime import date
+from datetime import date, datetime, timedelta
 from src.database import SessionLocal, user, usersubject, study_log, topic, subject
-from src.scheduler import calculate_subject_priorities
-import pandas as pd
+
 
 def render_dashboard_tab():
+
     db = SessionLocal()
-    st.title("📊 Priority Dashboard & Academic Overview")
-    st.info("Your central hub for exam count-downs, study trends, and overall readiness.")
 
-    db_user = db.query(user).filter(user.id == st.session_state.user_id).first()
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(135deg, #F7F4FF, #F4F8FF, #FFF7F2);
+    }
 
-    if not db_user.global_exam_start:
-        db_user.global_exam_start = str(date.today())
-        db.commit()
+    [data-testid="stHeader"] { background: transparent; }
 
-    stored_date = datetime_lib.datetime.strptime(db_user.global_exam_start, "%Y-%m-%d").date()
-    with st.expander("Global Exam Block Window Settings", expanded=False):
-        new_global_date = st.date_input("Semester Theory Exams Start Date", value=stored_date)
-        if str(new_global_date) != db_user.global_exam_start:
-            db_user.global_exam_start = str(new_global_date)
-            db.commit()
-            st.rerun()
+    .block-container {
+        max-width: 1100px;
+        padding-top: 2.2rem;
+        padding-bottom: 3rem;
+    }
 
-    global_exam_start_val = datetime_lib.datetime.strptime(db_user.global_exam_start, "%Y-%m-%d").date()
+    h1 { color: #493D67 !important; font-weight: 700 !important; }
+    h2, h3 { color: #574A75 !important; }
 
-    user_subjects = db.query(usersubject).filter(usersubject.user_id == st.session_state.user_id).all()
-    all_logs = db.query(study_log).filter(study_log.user_id == st.session_state.user_id).all()
-    
-    col_m1, col_m2 = st.columns(2)
-    col_m1.metric(label="Enrolled Subjects", value=len(user_subjects))
-    total_study_mins = sum(log.duration_minutes for log in all_logs) if all_logs else 0
-    col_m2.metric(label="Total Study Time", value=f"{total_study_mins} mins")
+    [data-testid="stMetric"] {
+        background: white;
+        border: 1px solid #E8E0F5;
+        border-radius: 16px;
+        padding: 15px 18px;
+        box-shadow: 0 3px 12px rgba(91,74,125,0.05);
+    }
 
-    st.markdown("---")
+    [data-testid="stMetricLabel"] { color: #817695 !important; }
+    [data-testid="stMetricValue"] { color: #51446F !important; }
 
-    if not user_subjects:
-        st.warning("No subjects enrolled yet. Go to 'Manage Subjects' to add courses and set your exam dates.")
-    else:
-        processed_subjects = calculate_subject_priorities(
-            user_subjects, db, subject, topic, global_exam_start_val
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255,255,255,0.92);
+        border: 1px solid #E7E0F1;
+        border-radius: 18px;
+        padding: 12px;
+        box-shadow: 0 4px 15px rgba(91,74,125,0.04);
+    }
+
+    [data-testid="stProgress"] > div {
+        background: #E9E3F4;
+        border-radius: 20px;
+        height: 9px;
+    }
+
+    [data-testid="stProgress"] > div > div {
+        background: #A995D5;
+        border-radius: 20px;
+    }
+
+    .stButton > button {
+        background: #8E7AB8;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    .stButton > button:hover {
+        background: #75619F;
+        color: white;
+    }
+
+    [data-testid="stExpander"] {
+        background: rgba(255,255,255,0.85);
+        border: 1px solid #E7E0F1;
+        border-radius: 14px;
+    }
+
+    .exam-card {
+        background: linear-gradient(120deg, #EAE3FA, #E5EFFD);
+        border: 1px solid #DCD2F0;
+        border-radius: 20px;
+        padding: 24px;
+        margin: 10px 0 20px 0;
+    }
+
+    .exam-label {
+        color: #786695;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .exam-name {
+        color: #493D67;
+        font-size: 25px;
+        font-weight: 700;
+        margin-top: 8px;
+    }
+
+    .exam-count {
+        color: #715B9B;
+        font-size: 34px;
+        font-weight: 700;
+        margin-top: 5px;
+    }
+
+    .exam-date {
+        color: #786D8D;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+
+    .study-card {
+        background: linear-gradient(120deg, #E5F4EC, #EFF8F2);
+        border: 1px solid #D2EADD;
+        border-radius: 18px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+    .study-label {
+        color: #62836F;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .study-value {
+        color: #386B4B;
+        font-size: 30px;
+        font-weight: 700;
+        margin-top: 5px;
+    }
+
+    .subject-name {
+        color: #51446F;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .subject-category {
+        color: #8B8299;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+
+    .section-caption {
+        color: #817695;
+        font-size: 14px;
+        margin-bottom: 15px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    try:
+        user_id = st.session_state.user_id
+
+        db_user = db.query(user).filter(user.id == user_id).first()
+
+        if not db_user:
+            st.error("User not found.")
+            return
+
+        st.title("Your Study Space")
+        st.caption("A calm space to plan, learn and make progress.")
+
+        # Exam date settings
+        stored_date = None
+
+        if db_user.global_exam_start:
+            try:
+                stored_date = datetime.strptime(
+                    db_user.global_exam_start, "%Y-%m-%d"
+                ).date()
+            except ValueError:
+                pass
+
+        with st.expander("Semester Exam Date Settings"):
+            new_date = st.date_input(
+                "Semester theory exams start date",
+                value=stored_date or date.today()
+            )
+
+            if st.button("Save exam date"):
+                db_user.global_exam_start = str(new_date)
+                db.commit()
+                st.success("Exam date updated.")
+                st.rerun()
+
+        # Fetch data
+        enrollments = (
+            db.query(usersubject)
+            .filter(usersubject.user_id == user_id)
+            .all()
         )
 
-        st.subheader("Daily Focus & Priorities")
-        st.write(f"Active Global Exam Start: **{global_exam_start_val}**")
-        
-        for rank, item in enumerate(processed_subjects, start=1):
-            sub = item["sub_obj"]
-            total_topics = item["total_topics"]
-            readiness_score = item["readiness_score"]  # Now derived from 1-10 confidence scale avg
-            remaining_topics = item["remaining_topics"]
-            days_left = item["days_left"]
-            
+        all_logs = (
+            db.query(study_log)
+            .filter(study_log.user_id == user_id)
+            .all()
+        )
 
-            date_label = f"{item['effective_date']} {'(Custom)' if item['is_individual'] else '(Block Window)'}"
-            
-            if days_left < 0:
-                timeline_msg = f"Exam window passed ({abs(days_left)} days ago)"
-            elif days_left == 0:
-                timeline_msg = "🚨 Exam is TODAY!"
+        if not enrollments:
+            st.info(
+                "You haven't added any subjects yet. "
+                "Start by adding subjects in Manage Subjects."
+            )
+            return
+
+        # Prepare subject information
+        subject_data = []
+
+        for enrollment in enrollments:
+
+            sub = db.query(subject).filter(
+                subject.id == enrollment.subject_id
+            ).first()
+
+            if not sub:
+                continue
+
+            topics = db.query(topic).filter(
+                topic.subject_id == sub.id
+            ).all()
+
+            total_topics = len(topics)
+
+            if total_topics:
+                total_confidence = sum(
+                    t.confidence_score or 0 for t in topics
+                )
+                readiness = int(
+                    (total_confidence / (total_topics * 10)) * 100
+                )
+                readiness = max(0, min(100, readiness))
+
+                pending_topics = sum(
+                    1 for t in topics if (t.confidence_score or 0) < 7
+                )
             else:
-                timeline_msg = f"⏳ {days_left} days left"
+                readiness = 0
+                pending_topics = 0
 
-            with st.container():
-                if rank <= 2 and remaining_topics > 0:
-                    st.markdown(f"High Priority Process: {sub.name} (`{sub.category}`)")
-                else:
-                    st.markdown(f"📖 {sub.name} (`{sub.category}`)")
+            # Individual exam date takes precedence
+            exam_date = None
 
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Readiness Score", f"{readiness_score}%")
-                c2.metric("Topics Needing Review", remaining_topics)
-                c3.metric("Target Date", date_label)
-                c4.metric("Timeline", timeline_msg)
+            if enrollment.exam_date and enrollment.exam_date != "None":
+                try:
+                    exam_date = datetime.strptime(
+                        enrollment.exam_date, "%Y-%m-%d"
+                    ).date()
+                except ValueError:
+                    pass
 
-                if total_topics == 0:
-                    st.warning("🔔 Kindly add some topics!")
-                elif readiness_score >= 80:
-                    st.success("🟢 Status: Process Optimized / On Track.")
-                elif readiness_score >= 40:
-                    st.warning("🟡 Status: Moderate Load. Keep clearing pending topics.")
-                else:
-                    st.error("🔴 Status: High Priority Bottleneck. Recommended focus for today.")
+            if not exam_date and stored_date:
+                exam_date = stored_date
 
-                st.markdown("---")
-        # Workload and completion analysis chart
-        st.subheader("Workload & Completion Analytics")
-        chart_data = []
-        for item in processed_subjects:
-            sub = item["sub_obj"]
-            chart_data.append({
-                "Subject": sub.name,
-                "Readiness Score (%)": item["readiness_score"],
-                "Low Confidence Topics": item["remaining_topics"]
+            days_left = (
+                (exam_date - date.today()).days
+                if exam_date else None
+            )
+
+            subject_data.append({
+                "subject": sub,
+                "readiness": readiness,
+                "total_topics": total_topics,
+                "pending_topics": pending_topics,
+                "exam_date": exam_date,
+                "days_left": days_left
             })
-        
-        df_chart = pd.DataFrame(chart_data)
-        if not df_chart.empty:
-            st.caption("Overall Subject Readiness Overview (%)")
-            st.bar_chart(df_chart.set_index("Subject")[["Readiness Score (%)", "Low Confidence Topics"]])
+
+        # Welcome
+        st.subheader("Welcome back!")
+        st.write("Take things one topic at a time. You're making progress.")
+
+        # Upcoming exam
+        st.markdown("## Upcoming Exams")
+
+        upcoming_exams = [
+            item for item in subject_data
+            if item["exam_date"] and item["days_left"] >= 0
+        ]
+
+        upcoming_exams.sort(key=lambda x: x["days_left"])
+
+        if upcoming_exams:
+            nearest = upcoming_exams[0]
+
+            if nearest["days_left"] == 0:
+                countdown = "Your exam is today"
+            else:
+                countdown = f'{nearest["days_left"]} days to go'
+
+            st.markdown(f"""
+            <div class="exam-card">
+                <div class="exam-label">Your next exam</div>
+                <div class="exam-name">{nearest["subject"].name}</div>
+                <div class="exam-count">{countdown}</div>
+                <div class="exam-date">
+                    {nearest["exam_date"].strftime("%d %B %Y")}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if len(upcoming_exams) > 1:
+                with st.expander("See other exam dates"):
+                    for item in upcoming_exams[1:]:
+                        st.write(
+                            f'{item["subject"].name} — '
+                            f'{item["exam_date"].strftime("%d %B %Y")}'
+                        )
         else:
-            st.info("Add topics to subjects to view analytics.")
+            st.info("No upcoming exam dates. Add dates to your subjects.")
 
-        st.markdown("---")
+        # Weekly study summary
+        st.markdown("## Your Study This Week")
 
-        #individual subject dropdown
-        st.subheader("Individual Enrollment Status")
-        
-        subject_options_map = {item["name"]: item for item in processed_subjects}
-        choosen_subject_name = st.selectbox("Choose Enrolled Subject", list(subject_options_map.keys()))
+        week_start = date.today() - timedelta(
+            days=date.today().weekday()
+        )
 
-        if choosen_subject_name:
-            selected_data = subject_options_map[choosen_subject_name]
-            sel_sub = selected_data["sub_obj"]
-            sel_tot = selected_data["total_topics"]
-            sel_rem = selected_data["remaining_topics"]
-            sel_score = selected_data["readiness_score"]
-            sel_days = selected_data["days_left"]
-            sel_date = selected_data["effective_date"]
+        weekly_minutes = 0
 
-            sel_pct = sel_score / 100.0
+        for log in all_logs:
+            if log.created_at:
+                try:
+                    log_date = datetime.strptime(
+                        log.created_at, "%Y-%m-%d %H:%M"
+                    ).date()
+
+                    if week_start <= log_date <= date.today():
+                        weekly_minutes += log.duration_minutes or 0
+
+                except ValueError:
+                    continue
+
+        hours = weekly_minutes // 60
+        minutes = weekly_minutes % 60
+
+        st.markdown(f"""
+        <div class="study-card">
+            <div class="study-label">TIME INVESTED THIS WEEK</div>
+            <div class="study-value">{hours}h {minutes}m</div>
+            <div class="study-label">
+                Every focused session counts.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Subject cards
+        st.markdown("## My Subjects")
+        st.markdown(
+            '<div class="section-caption">'
+            'Your subjects and their current learning progress.'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        pastel_colors = [
+            ("#EFF3FF", "#DCE5FC"),
+            ("#EDF7F0", "#D9EEDF"),
+            ("#FFF3EA", "#F9E1D0"),
+            ("#F5EEFF", "#E7DAF8")
+        ]
+
+        for index, item in enumerate(subject_data):
+
+            sub = item["subject"]
+            bg_color, border_color = pastel_colors[
+                index % len(pastel_colors)
+            ]
 
             with st.container(border=True):
-                st.markdown(f"📖 {sel_sub.name} (`{sel_sub.category}` — {sel_sub.credits} Credits)")
-                
-                sc1, sc2, sc3, sc4 = st.columns(4)
-                sc1.metric("Readiness Score", f"{sel_score}%")
-                sc2.metric("Total Topics", f"{sel_tot} topics")
-                sc3.metric("Remaining Topics", f"{sel_rem} topics")
-                sc4.metric("Days Left", f"{sel_days} days", f"Target: {sel_date}")
 
-                st.progress(sel_pct)
+                st.markdown(
+                    f'<div class="subject-name">{sub.name}</div>',
+                    unsafe_allow_html=True
+                )
 
-                if total_topics == 0:
-                    st.warning("🔔 Kindly add some topics!")
-                elif sel_score >= 80:
-                    st.success("🟢 Status: Course execution is optimized and well on track.")
-                elif sel_score >= 40:
-                    st.warning("🟡 Status: Moderate workload. Keep knocking out pending topics.")
+                if sub.category:
+                    st.caption(sub.category)
+
+                col1, col2 = st.columns(2)
+
+                col1.metric("Readiness", f'{item["readiness"]}%')
+                col2.metric("Topics to review", item["pending_topics"])
+
+                st.progress(item["readiness"] / 100)
+
+                if item["total_topics"] == 0:
+                    st.caption("No topics added yet.")
+
+                if item["exam_date"]:
+                    exam_text = item["exam_date"].strftime("%d %B %Y")
+
+                    if item["days_left"] < 0:
+                        st.caption(f"Exam: {exam_text} · Date passed")
+                    elif item["days_left"] == 0:
+                        st.caption(f"Exam: {exam_text} · Today")
+                    else:
+                        st.caption(
+                            f'Exam: {exam_text} · '
+                            f'{item["days_left"]} days remaining'
+                        )
                 else:
-                    st.error("🔴 Status: High priority bottleneck. Requires immediate study focus.")
+                    st.caption("Exam date not set.")
 
         st.markdown("---")
+        st.caption(
+            "Keep showing up for your goals. "
+            "Consistency matters more than perfection."
+        )
 
-        st.subheader("📈 Study Consistency Line Graph")
-        if all_logs:
-            log_data = [{"Date": log.created_at.split()[0], "Minutes": log.duration_minutes} for log in all_logs if log.created_at]
-            df_logs = pd.DataFrame(log_data)
-            df_grouped = df_logs.groupby("Date").sum().reset_index().sort_values("Date")
-            st.line_chart(df_grouped.set_index("Date"))
-        else:
-            st.info("No study consistency logs recorded yet.")
-
-    db.close()
+    finally:
+        db.close()

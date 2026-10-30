@@ -6,8 +6,62 @@ from src.database import SessionLocal, study_log, subject, usersubject
 from src.cache_helper import get_cached_audit,set_cached_audit
 
 def render_ai_auditor_tab():
-    st.title("🤖 AI Study Audit & Mentorship")
-    st.write("Get AI-powered insights across your entire week or zoom in on a specific subject's roadblocks.")
+    st.title("🤖 AI Study Review")
+    st.write("Review your learning progress, identify recurring difficulties, "
+    "and understand what needs more attention.")
+    
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(135deg, #F7F4FF, #F4F8FF, #FFF7F2);
+    }
+
+    [data-testid="stHeader"] {
+        background: transparent;
+    }
+
+    .block-container {
+        max-width: 1100px;
+        padding-top: 2.2rem;
+        padding-bottom: 3rem;
+    }
+
+    h1 {
+        color: #493D67 !important;
+        font-weight: 700 !important;
+    }
+
+    h2, h3 {
+        color: #574A75 !important;
+        font-weight: 650 !important;
+    }
+
+    [data-testid="stSelectbox"] > div > div {
+        border-radius: 10px;
+        background: white;
+    }
+
+    [data-testid="stAlert"] {
+        border-radius: 13px;
+    }
+
+    .stButton > button {
+        background: #8E7AB8;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 9px 18px;
+    }
+
+    .stButton > button:hover {
+        background: #75619F;
+        color: white;
+        border: none;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
 
     db = SessionLocal()
     user_id = st.session_state.get("user_id")
@@ -35,7 +89,6 @@ def render_ai_auditor_tab():
     # Selection mode: Global vs Subject-specific
     selected_target = st.selectbox("Select Review Scope", subject_names)
 
-    # Fetch logs
     logs = db.query(study_log).filter(study_log.user_id == user_id).all()
     
     filtered_logs = []
@@ -97,18 +150,37 @@ def render_ai_auditor_tab():
                 Keep it concise, well-formatted, and completely focused on synthesizing the logs together.
                 """
                 try:
-                    # Initialize client using the official google-genai library
-                    api_key = os.environ.get("GEMINI_API_KEY")
-                    client = genai.Client(api_key=api_key) if api_key else genai.Client()
-                    response = client.models.generate_content(
-                        model='gemini-3.6-flash',
-                        contents=prompt,
+                    
+                    # Check whether a cached review already exists
+                    cached_response = get_cached_audit(
+                        selected_target,
+                        log_summary_text
                     )
-                    #saving to cache
-                    set_cached_audit(selected_target,log_summary_text,response.text)
+
+                    if cached_response:
+                        audit_text = cached_response
+                        st.info("Showing cached review.")
+                    else:
+                        api_key = os.environ.get("GEMINI_API_KEY")
+                        client = genai.Client(api_key=api_key) if api_key else genai.Client()
+
+                        response = client.models.generate_content(
+                            model='gemini-3.6-flash',
+                            contents=prompt,
+                        )
+
+                        audit_text = response.text
+
+                        # Save the newly generated review
+                        set_cached_audit(
+                            selected_target,
+                            log_summary_text,
+                            audit_text
+                        )
 
                     st.subheader(f"7-Day AI Insights: {selected_target}")
-                    st.markdown(response.text)
+                    st.markdown(audit_text)
+
                 except Exception as e:
                     st.error(f"Error generating AI review. Ensure your GEMINI_API_KEY environment variable is set properly. Details: {e}")
 

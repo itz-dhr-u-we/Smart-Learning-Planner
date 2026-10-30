@@ -70,6 +70,115 @@ def extract_text_from_pdf_robust(file_path, sub_name, topic_name=None):
 
 def render_manage_subjects_tab():
     db = SessionLocal()
+    
+    st.markdown("""
+    <style>
+    /* Page background */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(135deg, #F7F4FF, #F4F8FF, #FFF7F2);
+    }
+
+    [data-testid="stHeader"] {
+        background: transparent;
+    }
+
+    .block-container {
+        max-width: 1100px;
+        padding-top: 2.2rem;
+        padding-bottom: 3rem;
+    }
+
+    /* Headings */
+    h1 {
+        color: #493D67 !important;
+        font-weight: 700 !important;
+    }
+
+    h2, h3 {
+        color: #574A75 !important;
+        font-weight: 650 !important;
+    }
+
+    /* Forms */
+    [data-testid="stForm"] {
+        background: rgba(255,255,255,0.88);
+        border: 1px solid #E7E0F1;
+        border-radius: 18px;
+        padding: 22px;
+    }
+
+    /* Expanders */
+    [data-testid="stExpander"] {
+        background: rgba(255,255,255,0.88);
+        border: 1px solid #E4DDF0;
+        border-radius: 15px;
+        margin-bottom: 10px;
+    }
+
+    [data-testid="stExpander"] summary {
+        color: #574A75;
+        font-weight: 600;
+    }
+
+    /* Resource and subject cards */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255,255,255,0.92);
+        border: 1px solid #E7E0F1;
+        border-radius: 16px;
+        padding: 12px;
+        box-shadow: 0 3px 12px rgba(91,74,125,0.04);
+    }
+
+    /* Inputs */
+    .stTextInput input,
+    .stNumberInput input,
+    .stDateInput input {
+        border-radius: 10px;
+        border-color: #DDD5EC;
+        background: #FFFFFF;
+    }
+
+    /* Select boxes */
+    [data-testid="stSelectbox"] > div > div {
+        border-radius: 10px;
+    }
+
+    /* Buttons */
+    .stButton > button,
+    .stFormSubmitButton > button {
+        background: #8E7AB8;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 7px 16px;
+    }
+
+    .stButton > button:hover,
+    .stFormSubmitButton > button:hover {
+        background: #75619F;
+        color: white;
+        border: none;
+    }
+
+    /* Sliders */
+    [data-testid="stSlider"] [role="slider"] {
+        background: #927DBD;
+    }
+
+    /* Progress and alerts */
+    [data-testid="stAlert"] {
+        border-radius: 12px;
+    }
+
+    /* Captions */
+    [data-testid="stCaptionContainer"] {
+        color: #827991;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
     st.title("Manage Your Subjects")
 
     with st.form("add_subject_form"):

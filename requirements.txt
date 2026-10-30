@@ -1,6 +1,14 @@
+
 streamlit
 google-genai
 sqlalchemy
 pandas
 numpy
 python-dotenv
+psycopg2-binary
+psycopg[binary]
+langchain
+langchain-core
+langchain-google-genai
+langchain-postgres
+pypdf
