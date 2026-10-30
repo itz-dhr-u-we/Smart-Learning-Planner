@@ -18,9 +18,16 @@ if DB_URL and DB_URL.startswith("postgresql://"):
         "postgresql+psycopg2://",
         1
     )
-    
+DB_URL = os.getenv("DATABASE_URL")
+
 if not DB_URL:
-    raise ValueError("DATABASE_URL not found in environment variables.")
+    try:
+        DB_URL = st.secrets["DATABASE_URL"]
+    except Exception:
+        DB_URL = None
+
+if not DB_URL:
+    raise ValueError("DATABASE_URL not found. Check Streamlit Secrets.")
 
 # Supabase PostgreSQL connection
 engine = create_engine(
