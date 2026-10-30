@@ -1,4 +1,3 @@
-
 streamlit
 google-genai
 sqlalchemy
@@ -11,4 +10,5 @@ langchain
 langchain-core
 langchain-google-genai
 langchain-postgres
+langchain-text-splitters
 pypdf
